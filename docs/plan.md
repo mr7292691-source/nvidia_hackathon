@@ -94,69 +94,92 @@ version works — there's no partial-credit "the interface exists" milestone.
 ## 3. Phase plan
 
 ### Phase 0 — Repo + infra setup
-- [ ] Confirm monorepo structure (§0) and branching model (§6)
-- [ ] Restructure into `backend/` + `frontend/` + `infra/` + `docs/`
-- [ ] Delete `infra/docker/` and `infra/switchyard/Dockerfile.switchyard`
-- [ ] Add `infra/slurm/backend.sbatch`, `infra/slurm/switchyard.sbatch`, `infra/slurm/nim-reasoning.sbatch`, `infra/slurm/nim-vision.sbatch`
-- [ ] Add `infra/apptainer/` with the `.def` files (or documented `apptainer pull` commands) for each NIM image
-- [ ] Root `README.md`, root `.gitignore`
-- [ ] **First commit + push** — proposed in chat, needs your go-ahead
+- [x] Confirm monorepo structure (§0) and branching model (§6) — confirmed: monorepo, trunk-based
+- [x] Restructure into `backend/` + `frontend/` + `infra/` + `docs/`
+- [x] Delete `infra/docker/` and `infra/switchyard/Dockerfile.switchyard`
+- [x] Add `infra/slurm/backend.sbatch`, `infra/slurm/switchyard.sbatch`, `infra/slurm/nim-reasoning.sbatch`, `infra/slurm/nim-vision.sbatch`
+- [ ] Add `infra/apptainer/` `.def` files — currently the `apptainer pull` commands live inline in the `.sbatch` scripts; a dedicated `.def` directory hasn't been split out (not blocking, just not done)
+- [x] Root `README.md`, root `.gitignore`
+- [x] **First commit + push** — committed locally (4 commits, latest `6d6cd01`); push itself is happening on your end via the git bundle, since this sandbox has no GitHub credentials
 
 ### Phase 1 — NVIDIA runtime, built real from the start
-- [ ] Pin exact NIM model IDs (reasoning + vision) after testing candidates on build.nvidia.com
-- [ ] Build Switchyard from source once (`cargo build --release -p switchyard-server`), place the binary in team shared storage, write `infra/slurm/switchyard.sbatch` to run it
-- [ ] Validate `routes.dev.toml` with `switchyard-server --config routes.dev.toml --dry-run`
-- [ ] Install `nemo-relay`, confirm the actual Python API matches what's coded in `relay_runtime.py`/`guardrails.py` — adjust to match reality, not the other way around
-- [ ] Wire real ATOF export, confirm a trajectory file is produced after a real run
-- [ ] Install `deepagents` + `langchain-nvidia-ai-endpoints`, rewrite `supervisor.py` as a real `create_deep_agent(...)` graph
-- [ ] Stand up a real OpenShell sandbox per the `langchain-ai/openshell-deepagent` reference; write and run an actual blocked-egress test (agent tries to reach an external host, confirm it fails)
-- [ ] **Definition of done:** one real end-to-end call — DeepAgents supervisor → specialist → NIM via Switchyard → Relay-recorded ATOF trajectory — succeeds against build.nvidia.com, no fallback paths taken
+- [ ] Pin exact NIM model IDs (reasoning + vision) after testing candidates on build.nvidia.com — placeholder IDs (`nvidia/nemotron-4-340b-instruct`, `nvidia/vila`) are in `routes.dev.yaml`, unverified against the live catalog since this sandbox can't reach it
+- [x] ~~Build Switchyard from source~~ — turned out unnecessary: `nemo-switchyard` ships a prebuilt manylinux wheel (`pip install nemo-switchyard`), no Rust toolchain needed. Corrected the config format too — it's a YAML routing-profile bundle (`switchyard serve --routing-profiles`), not the TOML/`--config` format originally assumed. `infra/slurm/switchyard.sbatch` written accordingly.
+- [x] ~~Validate `routes.dev.toml` with `--dry-run`~~ — superseded by the above; validated `routes.dev.yaml` directly against the real parser, and ran the actual server, which correctly served `/v1/models` and correctly attempted (and was blocked only by this sandbox's network policy on) a real upstream chat-completion call
+- [x] Install `nemo-relay`, confirm the actual Python API — confirmed and corrected twice against real behavior: `scope.scope()` uses `metadata=`, not `attributes=` (that's a bitflag type); `AtofExporterConfig` takes zero constructor args, properties set after
+- [x] Wire real ATOF export, confirm a trajectory file is produced after a real run — confirmed: real JSONL output with correct scope-start/scope-end records and metadata
+- [x] Install `deepagents` + `langchain-nvidia-ai-endpoints`, rewrite `supervisor.py` as a real `create_deep_agent(...)` graph — done; graph **constructs** successfully with 4 real `SubAgent`s and native `interrupt_on` human-approval wiring
+- [x] Stand up a real OpenShell sandbox client — real `openshell.SandboxClient` code written and matches the installed SDK's actual signatures
+- [ ] Run an actual blocked-egress test against a live OpenShell cluster — blocked: no reachable OpenShell cluster exists in this sandbox, genuinely untested
+- [ ] **Definition of done:** one real end-to-end call succeeding against build.nvidia.com — **not done, blocked by this sandbox's network policy** (`host_not_allowed` on `integrate.api.nvidia.com`), not by anything wrong in the code. This is the one item in Phase 1 that needs YOUR environment (real API key + real network access) to actually complete.
 
 ### Phase 2 — Persistence (prerequisite for real gates)
-- [ ] Choose SQLite (simplicity) or Postgres (durability across cluster restarts) — recommend SQLite for the demo given time constraints, revisit if the team wants it running unattended for longer
-- [ ] Define real tables in `app/db/models.py` for `EvidenceRecord`, `LifeSafetyGuidance`, `InsurerExposureReport`, approval queue entries
-- [ ] Replace `_EVENT_STORE`, `_FIELD_IMAGES`, `_APPROVAL_QUEUE` with real DB-backed reads/writes
-- [ ] Add a migration tool (Alembic) so schema changes are tracked, not ad hoc
+- [x] Choose SQLite — done, `DATABASE_URL` env-configurable, Postgres is a config change away if needed later
+- [x] Define real tables in `app/db/models.py` — `EvidenceRecordRow`, `FieldImageRow`, `ApprovalRow`, `LifeSafetyGuidanceRow`, `InsurerExposureReportRow`
+- [x] Replace `_EVENT_STORE`, `_FIELD_IMAGES`, `_APPROVAL_QUEUE` with real DB-backed reads/writes — done in `evidence_tools.py`, `notify_tools.py`, `human_approval.py`
+- [ ] Add Alembic migrations — not done; schema changes are currently ad hoc (`Base.metadata.create_all` on startup). Fine for the hackathon demo, worth doing if this lives past it.
 
 ### Phase 3 — Decision gates, built real
-- [ ] Implement real scoring in `evidence_verifier.py` against persisted lineage data
-- [ ] Define the vision NIM's structured output schema so `confidence_gate.py` has a real number to threshold
-- [ ] Implement `policy_verifier.py` against real computed exposure figures
-- [ ] **Proof required by the deck (slide 6):** a deliberately low-confidence case returns a clean "evidence gap" response, not a 500
-- [ ] Surface structured gate pass/fail/reason through `/agents/run` so `GatesPanel.tsx` shows real state
+- [x] Implement real scoring in `evidence_verifier.py` — done; caught and fixed a real bug where freshness was judged against the full event window instead of mutual source agreement, and excluded FEMA (a standing reference dataset) from freshness scoring
+- [x] Vision NIM structured output → confidence gate threshold — done via `EvidenceRecordRow.vision_confidence`, combined with the evidence verifier's score
+- [x] Implement `policy_verifier.py` against real computed exposure figures — done, with a configurable drift tolerance
+- [x] **Proof required by the deck (slide 6):** verified end-to-end — a blocked case returns `EvidenceGapError` → clean 200 response via `/agents/run` and the new `/agents/gates/{event_id}` endpoint, not a 500. Covered by an integration test.
+- [x] Surface structured gate pass/fail/reason through the API — done via `GET /agents/gates/{event_id}`, and `GatesPanel.tsx` now renders it for real
+- [x] 13 direct unit tests added for all three gates (`tests/unit/test_gates.py`) — 17/17 tests passing overall
 
 ### Phase 4 — Evidence layer, live sources where feasible now
-- [ ] NWS: implement `live` mode against `api.weather.gov/alerts` (no key required) — no reason this stays unimplemented
-- [ ] USGS: implement `live` mode against `waterservices.usgs.gov/nwis/iv/` (no key required)
-- [ ] FEMA: implement `live` mode against the NFHL public feed
-- [ ] HCFCD / TranStar: genuinely blocked on access coordination (per the deck itself) — replay mode stays until access is granted, at which point implement without changing the `SourceRecord` contract. This is the one legitimate exception to "no stubs," because it's an external dependency outside the team's control, not a shortcut.
+- [x] NWS: `live` mode implemented against `api.weather.gov/alerts` — real code (real params, real GeoJSON parsing, client-side bbox filtering), **genuinely unverified against live data**: confirmed this sandbox's network policy blocks `api.weather.gov` the same way it blocks NVIDIA's endpoint (`host_not_allowed`). The bbox-intersection logic itself (no network needed) was tested directly and works correctly.
+- [x] USGS: `live` mode implemented against `waterservices.usgs.gov/nwis/iv/` — same real-but-unverified status as NWS
+- [x] FEMA: `live` mode implemented against the NFHL ArcGIS REST service — same status
+- [ ] HCFCD / TranStar: still replay-only, correctly, per the deck's own stated access-coordination blocker — no change expected here until the team has that access
 
 ### Phase 5 — Frontend, real backend integration
-- [ ] Replace `EventMap.tsx`'s JSON dump with a real MapLibre GL map (event polygon + gauge/roadway markers)
-- [ ] Wire `GatesPanel` to real per-gate results (needs Phase 3 first)
-- [ ] Fix `Dashboard.tsx`'s navigation to trigger off a real store update, not a timing assumption
-- [ ] Real auth/identity for `ApprovalQueue.tsx`, replacing the hardcoded `"demo-operator"` — needs a decision on what auth the team is using (see §5, item 6)
-- [ ] Consistent loading/error states across all pages
-- [ ] Run the frontend against the real backend (not just isolated `tsc`/`vite build` checks) and fix whatever breaks
+- [ ] Replace `EventMap.tsx`'s JSON dump with a real MapLibre GL map — not done, still the placeholder JSON view
+- [x] Wire `GatesPanel` to real per-gate results — done, backed by the new `/agents/gates/{event_id}` endpoint
+- [x] Fix `Dashboard.tsx`'s navigation timing bug — done, now triggers off a real store-state effect with a ref guard instead of assuming `run()` resolves before `navigate()`
+- [ ] Real auth/identity for `ApprovalQueue.tsx` — not done, still hardcoded `"demo-operator"`; still needs your decision (§5, item 6) on whether the demo needs this at all
+- [ ] Consistent loading/error states across all pages — partial (Dashboard and the new gates hook have them; other pages don't yet)
+- [x] Both `tsc -b` and `vite build` verified clean after every change in this round — real backend integration (calling the actual FastAPI app, not mocks) hasn't been run in a real browser yet, only via typecheck/build and direct HTTP client tests against the ASGI app
 
 ### Phase 6 — Testing & CI
-- [ ] Backend: unit tests for the real gate logic, evidence lineage builder, live adapter parsing
-- [ ] Backend: integration test against a real (or recorded) NIM response via Switchyard
-- [ ] Frontend: component tests (Vitest + React Testing Library) for `GatesPanel`, `InsurerExposureCard`, `LifeSafetyCard`
-- [ ] GitHub Actions: `backend-ci.yml` (ruff, mypy, pytest) and `frontend-ci.yml` (eslint, tsc, vite build) — no Docker needed for either, both run directly on GitHub's runners
-- [ ] Both must pass before any push to `main` per §6
+- [x] Backend: unit tests for the real gate logic — done, 13 tests in `tests/unit/test_gates.py`
+- [ ] Backend: unit tests for the evidence lineage builder specifically — partially covered indirectly via the gate tests, no dedicated test file yet
+- [ ] Backend: integration test against a real (or recorded) NIM response via Switchyard — not done, blocked on the same network-access issue as Phase 1
+- [ ] Frontend: component tests (Vitest + React Testing Library) — not done
+- [ ] GitHub Actions workflows — not done
+- [ ] Both must pass before any push to `main` — not enforced yet, no CI exists
+
+**Current real status: 17/17 backend tests passing** (`pytest tests/ -q`), run fresh before every commit in this conversation.
 
 ### Phase 7 — Deployment on Curiosity v2 (Slurm + Apptainer, no Docker)
+**Status: not started — needs your cluster access, none of this is runnable from this sandbox.**
 - [ ] Pull NIM images via Apptainer (`apptainer pull ... docker://nvcr.io/nim/...`), confirm they run with `--nv` GPU passthrough
 - [ ] Submit `sbatch` jobs for backend, Switchyard, and both NIM containers
-- [ ] Confirm `routes.prod.toml` targets resolve to the running Slurm jobs' node hostnames/ports
+- [ ] Confirm `routes.prod.yaml` targets resolve to the running Slurm jobs' node hostnames/ports
 - [ ] Flip `LIFESHIELD_ENV=prod`, re-run the Houston replay demo against the B300-hosted stack, confirm identical output shape to dev
 - [ ] Rehearse the full demo end to end at least twice before presenting
 
 ### Phase 8 — Demo readiness
+**Status: not started.**
 - [ ] `docs/demo_script.md` — exact click-path reproducing the deck's slide 5 flow
 - [ ] Fallback recording/screenshots in case live B300 access is flaky during presentation
 - [ ] Live confirmation in front of the team that an agent genuinely cannot reach the open internet from inside its OpenShell sandbox
+
+---
+
+## Overall progress snapshot
+
+| Phase | Status |
+|---|---|
+| 0 — Repo + infra setup | ✅ Done (committed, 4 commits, push pending on your side) |
+| 1 — NVIDIA runtime | 🟡 Everything network-independent is real and verified; the actual live-endpoint call is the one item blocked on your API key + network access |
+| 2 — Persistence | ✅ Done (Alembic migrations optional, not blocking) |
+| 3 — Decision gates | ✅ Done, tested end-to-end including the slide-6 proof requirement |
+| 4 — Live evidence sources | 🟡 NWS/USGS/FEMA real code written, unverified against live data (same network block); HCFCD/TranStar correctly still replay-only |
+| 5 — Frontend integration | 🟡 Gates + navigation fixed; map, auth, full loading states still open |
+| 6 — Testing & CI | 🟡 17/17 backend tests passing; no frontend tests, no CI pipeline yet |
+| 7 — Cluster deployment | ⬜ Not started — needs your cluster access |
+| 8 — Demo readiness | ⬜ Not started |
 
 ---
 
