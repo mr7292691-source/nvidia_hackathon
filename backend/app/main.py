@@ -5,7 +5,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.routes import agents, approvals, decisions, evidence, events, replay
+from app.api.routes import agents, approvals, decisions, events, evidence, replay
 from app.core.config import get_settings
 from app.core.logging import configure_logging
 from app.db.session import init_db

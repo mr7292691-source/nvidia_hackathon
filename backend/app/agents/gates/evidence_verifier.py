@@ -11,8 +11,7 @@ anything downstream (confidence gate, agents, decision outputs) ever sees it.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime, timedelta, timezone
-from typing import Any
+from datetime import UTC, datetime, timedelta
 
 from app.db.models import EvidenceRecordRow
 from app.db.session import get_session
@@ -62,7 +61,7 @@ async def evidence_verifier_check(
         if latest_raw and source not in NON_TIME_SENSITIVE_SOURCES:
             latest = datetime.fromisoformat(latest_raw)
             if latest.tzinfo is None:
-                latest = latest.replace(tzinfo=timezone.utc)
+                latest = latest.replace(tzinfo=UTC)
             time_sensitive_latest.append((source, latest))
 
     if corroborating < MIN_CORROBORATING_SOURCES:

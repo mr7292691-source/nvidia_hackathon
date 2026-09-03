@@ -114,6 +114,8 @@ def _geometry_intersects_bbox(geometry: dict, bbox: dict) -> bool:
 
     geom_type = geometry.get("type")
     coords = geometry.get("coordinates")
+    if coords is None:
+        return False
     if geom_type == "Point":
         lon, lat = coords
         return bmin_lon <= lon <= bmax_lon and bmin_lat <= lat <= bmax_lat

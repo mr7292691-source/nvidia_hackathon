@@ -41,17 +41,21 @@ GUARDRAIL_NAME = "lifeshield-decision-gates"
 GUARDRAIL_PRIORITY = 10
 
 
-async def _decision_gates_guardrail(tool_name: str, args: dict) -> str | None:
+async def _decision_gates_guardrail(tool_name: str, args: nemo_relay.JsonValue) -> str | None:
     """
-    The single registered guardrail callback. `args` is whatever JSON dict
-    the caller passed to `nemo_relay.tools.execute` — our tool wrappers
-    (app/agents/tools/*.py) are responsible for including `event_id` in
-    that dict so the gates have something to look up.
+    The single registered guardrail callback. `args` is whatever JSON value
+    the caller passed to `nemo_relay.tools.execute` -- typed against
+    `nemo_relay.JsonValue` to match the real registered-callback signature
+    (an earlier draft typed this as a plain `dict`, which mypy flagged as
+    incompatible with what `register_tool_conditional_execution` actually
+    expects). Our tool wrappers (app/agents/tools/*.py) are responsible for
+    including `event_id` in that dict so the gates have something to look up.
     """
-    event_id = args.get("event_id") if isinstance(args, dict) else None
+    event_id_raw = args.get("event_id") if isinstance(args, dict) else None
+    event_id = event_id_raw if isinstance(event_id_raw, str) else None
 
     for check in (evidence_verifier_check, confidence_gate_check, policy_verifier_check):
-        result = await check(event_id=event_id, tool_name=tool_name, args=args)
+        result = await check(event_id=event_id, tool_name=tool_name, args=args if isinstance(args, dict) else None)
         if not result.passed:
             logger.info("Gate blocked tool=%s event_id=%s reason=%s", tool_name, event_id, result.reason)
             return result.reason

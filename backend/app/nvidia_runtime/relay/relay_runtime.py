@@ -37,7 +37,7 @@ logger = logging.getLogger(__name__)
 
 T = TypeVar("T")
 
-_atof_exporter: "nemo_relay.AtofExporter | None" = None
+_atof_exporter: nemo_relay.AtofExporter | None = None
 
 
 def init_relay() -> None:

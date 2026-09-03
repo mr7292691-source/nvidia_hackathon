@@ -39,5 +39,15 @@ dev = [
 [tool.ruff]
 line-length = 100
 
+[tool.ruff.lint]
+# Base pyflakes + pycodestyle-error set, plus import sorting. Explicitly
+# NOT enabling DTZ (datetime-timezone-awareness) project-wide: this
+# codebase consistently uses naive UTC datetimes throughout (evidence
+# timestamps, event windows, DB columns) as a deliberate, uniform choice
+# for the hackathon demo -- enforcing tz-aware datetimes would mean
+# touching every timestamp in the evidence/persistence layer for a
+# style preference, not a bug. Revisit if this moves past demo scope.
+select = ["E4", "E7", "E9", "F", "I"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

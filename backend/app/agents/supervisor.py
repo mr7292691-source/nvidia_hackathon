@@ -27,7 +27,7 @@ called out honestly rather than claimed as tested.
 """
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from deepagents import SubAgent, create_deep_agent
 from langchain_core.tools import tool
@@ -59,15 +59,22 @@ def _build_tools_for_event(event_id: str) -> dict[str, Any]:
     governed_call() so the real NeMo Relay guardrail (evidence_verifier ->
     confidence_gate -> policy_verifier) actually runs before the
     underlying function executes.
+
+    governed_call() is typed against nemo_relay's real (non-generic)
+    JsonValue return type -- confirmed by reading tools.py directly, it
+    isn't parameterized per-call. The cast() calls below are safe because
+    we know by construction what each of our own tool functions returns;
+    this was flagged by mypy as a real type mismatch against the library's
+    actual signature, not a style nit.
     """
 
     @tool
     async def evidence_record_tool() -> dict:
         """Fetch this event's evidence record (sources + lineage)."""
-        return await governed_call(
+        return cast(dict, await governed_call(
             name="evidence_record_tool", event_id=event_id, args={},
             func=lambda: get_evidence_record(event_id=event_id),
-        )
+        ))
 
     @tool
     async def vision_assessment_tool() -> dict:
@@ -75,18 +82,20 @@ def _build_tools_for_event(event_id: str) -> dict[str, Any]:
         image = await get_field_image(event_id=event_id)
         if image is None:
             return {"damage_assessment": None, "note": "no field image submitted"}
-        return await governed_call(
+        return cast(dict, await governed_call(
             name="vision_assessment_tool", event_id=event_id, args={},
             func=lambda: assess_flood_image(image_bytes=image, event_id=event_id),
-        )
+        ))
 
     @tool
     async def policy_overlay_tool() -> list[dict]:
         """Fetch synthetic insurer policies inside this event's footprint."""
-        return await governed_call(
-            name="policy_overlay_tool", event_id=event_id, args={},
-            func=lambda: get_policies_in_footprint(event_id=event_id),
-        )
+        async def _fetch() -> Any:
+            return await get_policies_in_footprint(event_id=event_id)
+
+        return cast(list, await governed_call(
+            name="policy_overlay_tool", event_id=event_id, args={}, func=_fetch,
+        ))
 
     @tool
     async def request_approval_tool(proposed_action: dict) -> str:

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRunHoustonReplay } from "../hooks/useRunHoustonReplay";
 import { useActiveEventStore } from "../store/activeEventStore";
@@ -8,23 +8,34 @@ export function Dashboard() {
   const { run } = useRunHoustonReplay();
   const { eventId, isRunning, error } = useActiveEventStore();
   const navigate = useNavigate();
-  // Tracks whether the user just triggered a run in THIS page visit, so we
-  // only auto-navigate once, right after a fresh run finishes -- not on
-  // every render where eventId happens to already be set (e.g. coming back
-  // to the Dashboard from EventDetail shouldn't bounce you right back).
-  const justTriggered = useRef(false);
+
+  // Real state (not a ref) for anything that affects what's rendered --
+  // ESLint's react-hooks rules correctly flagged an earlier draft that
+  // read a ref's `.current` directly in JSX ("Cannot access ref value
+  // during render": refs don't trigger re-renders, so the UI could go
+  // stale). The ref below is only used inside the effect, never read
+  // during render, which is the legitimate use case for it.
+  const [justFinished, setJustFinished] = useState(false);
+  const pendingNavigation = useRef(false);
 
   async function handleRun() {
-    justTriggered.current = true;
+    pendingNavigation.current = true;
+    setJustFinished(false);
     await run();
   }
 
   useEffect(() => {
-    if (justTriggered.current && eventId && !isRunning) {
-      justTriggered.current = false;
+    if (pendingNavigation.current && eventId && !isRunning) {
+      pendingNavigation.current = false;
       navigate("/event");
     }
   }, [eventId, isRunning, navigate]);
+
+  useEffect(() => {
+    if (eventId && !isRunning && !pendingNavigation.current) {
+      setJustFinished(true);
+    }
+  }, [eventId, isRunning]);
 
   return (
     <div>
@@ -43,7 +54,7 @@ export function Dashboard() {
           {isRunning ? "Running..." : "Run Houston replay"}
         </button>
         {error && <p style={{ color: "#c5221f" }}>{error}</p>}
-        {eventId && !isRunning && !justTriggered.current && (
+        {eventId && justFinished && (
           <p style={{ fontSize: "0.85rem", color: "#1e8e3e" }}>
             Last event: {eventId} — <a href="/event">view details</a>
           </p>

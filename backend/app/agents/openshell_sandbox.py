@@ -1,9 +1,12 @@
 """
 OpenShell sandbox session manager -- real `openshell` 0.0.116 SDK
 (gRPC-backed), NOT the placeholder that used to log a message and do
-nothing. Verified by introspection against the installed package:
-`SandboxClient.from_active_cluster(...)`, `.create(...)`, `.create_session(...)`,
-`SandboxSession.exec(...)` are all real methods with real signatures.
+nothing. Verified by introspection against the installed package, and
+corrected once already by running `mypy` against it: every
+`SandboxClient` lifecycle method (`create`, `wait_ready`, `delete`,
+`wait_deleted`) requires a `workspace` keyword argument that isn't
+optional -- an earlier draft of this file omitted it, which mypy caught
+as a real type error (missing required argument), not a style nit.
 
 This IS the mechanism behind the deck's guardrail: "Agents never consume
 raw websites or databases -- they receive validated tools and evidence
@@ -13,11 +16,10 @@ session lifecycle from the application side.
 
 HONEST LIMITATION: `SandboxClient.from_active_cluster()` requires a
 reachable OpenShell cluster (a real gRPC server) -- there is no such
-cluster in the sandbox this code was written in, so the `start()`/`stop()`
-calls below are real client code but have not been executed against a live
-cluster. This is a genuine, currently-unverified integration point, same
-category as the NIM/Switchyard-to-real-model calls -- called out explicitly
-rather than presented as tested.
+cluster in the sandbox this code was written in, so this has been
+type-checked and read carefully against the real SDK, but never actually
+executed against a live cluster. Genuinely unverified, called out
+explicitly rather than presented as tested.
 """
 from __future__ import annotations
 
@@ -31,39 +33,40 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
+# TODO: confirm the real workspace name/convention once a live OpenShell
+# cluster is available -- "default" is a placeholder, not verified against
+# any actual cluster configuration.
+DEFAULT_WORKSPACE = "default"
+
 
 class OpenShellSandboxSession:
-    def __init__(self, sandbox_name: str) -> None:
+    def __init__(self, sandbox_name: str, workspace: str = DEFAULT_WORKSPACE) -> None:
         self.sandbox_name = sandbox_name
+        self.workspace = workspace
         self._client: openshell.SandboxClient | None = None
-        self._sandbox_id: str | None = None
 
     async def start(self) -> None:
-        """
-        Connects to the active OpenShell cluster and creates a sandbox for
-        this session. Requires OPENSHELL_CLUSTER (or whatever the real
-        cluster-discovery env var is called -- confirm against your
-        OpenShell deployment's docs, `from_active_cluster` reads ambient
-        cluster config) to point at a reachable cluster.
-        """
         self._client = openshell.SandboxClient.from_active_cluster()
-        sandbox = self._client.create(name=self.sandbox_name)
-        self._sandbox_id = sandbox.id
-        self._client.wait_ready(self._sandbox_id)
-        logger.info("OpenShell sandbox '%s' (id=%s) ready.", self.sandbox_name, self._sandbox_id)
+        self._client.create(workspace=self.workspace, name=self.sandbox_name)
+        self._client.wait_ready(self.sandbox_name, workspace=self.workspace)
+        logger.info("OpenShell sandbox '%s' (workspace=%s) ready.", self.sandbox_name, self.workspace)
 
     async def stop(self) -> None:
-        if self._client is not None and self._sandbox_id is not None:
-            self._client.delete(self._sandbox_id)
-            self._client.wait_deleted(self._sandbox_id)
-            logger.info("OpenShell sandbox '%s' deleted.", self.sandbox_name)
         if self._client is not None:
+            self._client.delete(self.sandbox_name, workspace=self.workspace)
+            self._client.wait_deleted(self.sandbox_name, workspace=self.workspace)
+            logger.info("OpenShell sandbox '%s' deleted.", self.sandbox_name)
             self._client.close()
 
-    def exec(self, command: str) -> "openshell.ExecResult":
-        if self._client is None or self._sandbox_id is None:
+    def exec(self, command: list[str]) -> "openshell.ExecResult":
+        """`command` is argv-style (e.g. ["python3", "-c", "..."]), not a
+        shell string -- confirmed against the real signature, which takes
+        `Sequence[str]`. `exec` itself takes no `workspace` kwarg (unlike
+        create/delete/wait_ready/wait_deleted), since it addresses the
+        sandbox by id directly."""
+        if self._client is None:
             raise RuntimeError("Sandbox not started -- call start() first.")
-        return self._client.exec(self._sandbox_id, command)
+        return self._client.exec(self.sandbox_name, command)
 
 
 @asynccontextmanager

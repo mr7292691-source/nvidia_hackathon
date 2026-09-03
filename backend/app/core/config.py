@@ -9,6 +9,7 @@ Nothing in application code should ever hardcode a NIM URL — always go
 through SWITCHYARD_BASE_URL so swapping environments is a config change.
 """
 from functools import lru_cache
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 

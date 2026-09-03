@@ -14,11 +14,17 @@ Relay entirely -- there is no other enforcement point.
 from __future__ import annotations
 
 from collections.abc import Awaitable, Callable
-from typing import Any, TypeVar
 
 import nemo_relay
 
-T = TypeVar("T")
+# nemo_relay's real `tools.execute` signature is typed against its own
+# `JsonValue` union (str | int | float | bool | None | list | dict), not an
+# arbitrary generic -- confirmed by running mypy against an earlier draft
+# that used a plain TypeVar here, which failed with real type errors
+# (incompatible callback/return types), not stylistic ones. Every tool this
+# app wraps already returns a JSON-compatible dict, so this isn't a
+# practical limitation, just a more accurate type.
+JsonValue = nemo_relay.JsonValue
 
 
 class EvidenceGapError(Exception):
@@ -34,16 +40,20 @@ class EvidenceGapError(Exception):
 
 
 async def governed_call(
-    *, name: str, event_id: str, args: dict[str, Any], func: Callable[[], Awaitable[T]]
-) -> T:
+    *,
+    name: str,
+    event_id: str,
+    args: dict[str, JsonValue],
+    func: Callable[[], Awaitable[JsonValue]],
+) -> JsonValue:
     """
     `args` MUST include event_id (the registered guardrail in
     relay/guardrails.py reads it from here) plus anything else a gate might
     need (e.g. `asserted_total_exposure_usd` for the policy verifier).
     """
-    full_args = {"event_id": event_id, **args}
+    full_args: dict[str, JsonValue] = {"event_id": event_id, **args}
 
-    async def _wrapped(_args: dict) -> "nemo_relay.ToolExecutionResult":
+    async def _wrapped(_args: nemo_relay.JsonValue) -> nemo_relay.ToolExecutionResult:
         result = await func()
         return nemo_relay.ToolExecutionResult(result)
 
