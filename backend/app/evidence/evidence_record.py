@@ -65,6 +65,17 @@ async def build_event_bundle(
         created_at=datetime.utcnow(),
         event_window=event_window,
         bbox=bbox,
-        sources={name: [r.__dict__ for r in records] for name, records in sources.items()},
+        sources={name: [_source_record_to_json(r) for r in records] for name, records in sources.items()},
         lineage=lineage,
     )
+
+
+def _source_record_to_json(record: SourceRecord) -> dict:
+    """SourceRecord.__dict__ contains raw datetime objects, which aren't
+    JSON-serializable -- this was caught by actually trying to persist a
+    record (SQLAlchemy's JSON column raised TypeError), not by inspection.
+    Converts to ISO strings so it can round-trip through the JSON column."""
+    data = dict(record.__dict__)
+    data["fetched_at"] = record.fetched_at.isoformat()
+    data["observed_at"] = record.observed_at.isoformat()
+    return data

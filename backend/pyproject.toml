@@ -1,34 +1,31 @@
 [project]
 name = "lifeshield-backend"
 version = "0.1.0"
-description = "LifeShield AI — multi-agent disaster response backend (NVIDIA GSI Open Hackathon)"
+description = "LifeShield AI -- multi-agent disaster response backend (NVIDIA GSI Open Hackathon)"
 requires-python = ">=3.11"
 dependencies = [
     "fastapi>=0.115",
     "uvicorn[standard]>=0.30",
+    "python-multipart>=0.0.9",
     "pydantic>=2.7",
     "pydantic-settings>=2.3",
     "httpx>=0.27",
     "python-dotenv>=1.0",
     "sqlalchemy>=2.0",
-    "aiosqlite>=0.20",           # swap for postgres in prod via DATABASE_URL
+    "aiosqlite>=0.20",
 
-    # LangChain / DeepAgents / OpenShell orchestration
-    "langchain-core>=0.3",
-    "langgraph>=0.2",
-    "deepagents",                 # https://github.com/langchain-ai/deepagents
-    "langchain-nvidia-ai-endpoints>=0.3",  # NVIDIA NIM chat/embeddings client
-
-    # NVIDIA NeMo Relay (Python binding) — governance/observability runtime
-    "nemo-relay",                  # https://github.com/NVIDIA/NeMo-Relay
-
-    # NOTE: NVIDIA-NeMo/Switchyard runs as a sidecar proxy (switchyard-server),
-    # not a Python import — see infra/switchyard/. The backend only needs an
-    # OpenAI-compatible HTTP client (httpx) to talk to it.
-
-    # NOTE: OpenShell sandbox runtime is invoked via the openshell-deepagent
-    # pattern (CLI/SDK, pinned once the team vendors it) — see
-    # app/agents/openshell_sandbox.py for the integration seam.
+    # Real NVIDIA / LangChain stack -- versions below are pinned to what was
+    # actually installed and verified working together in this environment
+    # (see docs/plan.md for what was tested vs. what still needs a live
+    # NVIDIA endpoint to verify).
+    "langchain-core==1.6.1",
+    "langchain==1.3.18",
+    "langgraph==1.2.11",
+    "deepagents==0.7.13",
+    "langchain-nvidia-ai-endpoints==1.4.3",
+    "nemo-relay==0.8.3",
+    "openshell==0.0.116",
+    "nemo-switchyard==0.2.0",  # provides the `switchyard` CLI, see infra/slurm/switchyard.sbatch
 ]
 
 [project.optional-dependencies]
@@ -41,3 +38,6 @@ dev = [
 
 [tool.ruff]
 line-length = 100
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"

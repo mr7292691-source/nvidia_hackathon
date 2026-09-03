@@ -8,16 +8,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import agents, approvals, decisions, evidence, events, replay
 from app.core.config import get_settings
 from app.core.logging import configure_logging
-from app.nvidia_runtime.relay.guardrails import register_all_guardrails
-from app.nvidia_runtime.relay.relay_runtime import init_relay
+from app.db.session import init_db
+from app.nvidia_runtime.relay.guardrails import deregister_all_guardrails, register_all_guardrails
+from app.nvidia_runtime.relay.relay_runtime import init_relay, shutdown_relay
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     configure_logging()
+    await init_db()
     init_relay()
     register_all_guardrails()
     yield
+    deregister_all_guardrails()
+    shutdown_relay()
 
 
 def create_app() -> FastAPI:

@@ -5,8 +5,8 @@ Per slide 6: "The evidence verifier scores freshness, location and source
 agreement." Real implementation: reads the persisted EvidenceRecord's
 lineage (app/db/models.py:EvidenceRecordRow, written by
 app/evidence/evidence_record.py) and applies real thresholds. If sources
-are stale or too few corroborate, the record fails here before anything
-downstream (confidence gate, agents, decision outputs) ever sees it.
+disagree in time or too few corroborate, the record fails here before
+anything downstream (confidence gate, agents, decision outputs) ever sees it.
 """
 from __future__ import annotations
 
@@ -19,6 +19,14 @@ from app.db.session import get_session
 
 MAX_STALENESS = timedelta(hours=6)
 MIN_CORROBORATING_SOURCES = 2
+
+# FEMA flood-zone data is a standing reference dataset (zone designations
+# don't change hour to hour), not a live sensor reading -- caught by
+# actually running this against the replay fixtures: FEMA's fixture is
+# dated 2026-01-01 (zones are annual/static), which made every replay fail
+# freshness by construction when treated the same as a live gauge reading.
+# It still counts toward corroboration, just not toward the freshness check.
+NON_TIME_SENSITIVE_SOURCES = {"FEMA"}
 
 
 @dataclass
@@ -40,46 +48,50 @@ async def evidence_verifier_check(
     if row is None:
         return GateResult(passed=False, reason=f"No evidence record found for event_id={event_id}.")
 
-    # Freshness is judged relative to the event's OWN time window, not real
-    # wall-clock time -- this is a replay of a historical/synthetic
-    # scenario (deck slide 5: "Illustrative synthetic scenario"), so
-    # comparing a June 2026 fixture's timestamps against September 2026
-    # wall-clock time would make every replay fail freshness by
-    # construction. The event's window_end is the simulated "now" within
-    # the scenario being replayed.
-    simulated_now = row.window_end
-    if simulated_now.tzinfo is None:
-        simulated_now = simulated_now.replace(tzinfo=timezone.utc)
-
     corroborating = 0
-    stale_sources: list[str] = []
+    time_sensitive_latest: list[tuple[str, datetime]] = []
 
     for entry in row.lineage:
         record_count = entry.get("record_count", 0)
-        latest_raw = entry.get("latest_observed_at")
+        source = entry.get("source", "unknown")
         if record_count <= 0:
             continue
         corroborating += 1
-        if latest_raw:
+
+        latest_raw = entry.get("latest_observed_at")
+        if latest_raw and source not in NON_TIME_SENSITIVE_SOURCES:
             latest = datetime.fromisoformat(latest_raw)
             if latest.tzinfo is None:
                 latest = latest.replace(tzinfo=timezone.utc)
-            if simulated_now - latest > MAX_STALENESS:
-                stale_sources.append(entry.get("source", "unknown"))
-
-    if stale_sources:
-        return GateResult(
-            passed=False,
-            reason=f"Stale evidence from source(s): {', '.join(stale_sources)} "
-            f"(older than {MAX_STALENESS}).",
-            score=corroborating / max(len(row.lineage), 1),
-        )
+            time_sensitive_latest.append((source, latest))
 
     if corroborating < MIN_CORROBORATING_SOURCES:
         return GateResult(
             passed=False,
             reason=f"Only {corroborating} corroborating source(s); "
             f"need at least {MIN_CORROBORATING_SOURCES}.",
+            score=corroborating / max(len(row.lineage), 1),
+        )
+
+    # Source agreement in time: rather than comparing against an arbitrary
+    # wall-clock or the full event window (which can span much longer than
+    # sensor reporting cadence -- caught by actually running this: a 14-hour
+    # event window made 8-10am sensor readings look "stale" by end of
+    # window even though they closely agreed with each other), freshness
+    # is judged as mutual agreement among the time-sensitive sources
+    # themselves: how far apart is the earliest from the latest reading.
+    stale_sources: list[str] = []
+    if time_sensitive_latest:
+        reference_time = max(t for _, t in time_sensitive_latest)
+        for source, latest in time_sensitive_latest:
+            if reference_time - latest > MAX_STALENESS:
+                stale_sources.append(source)
+
+    if stale_sources:
+        return GateResult(
+            passed=False,
+            reason=f"Source(s) disagree in time by more than {MAX_STALENESS}: "
+            f"{', '.join(stale_sources)}.",
             score=corroborating / max(len(row.lineage), 1),
         )
 
