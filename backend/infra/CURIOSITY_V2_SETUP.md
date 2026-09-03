@@ -26,12 +26,15 @@ compute.
 ```bash
 srun --qos=1gpu --gres=gpu:1 --pty bash
 
-# Confirmed on the real cluster: stdlib `python3 -m venv` fails here with
-# "ensurepip is not available" (missing python3.12-venv system package,
-# no sudo on a shared cluster to fix it the suggested way). Use `uv`
-# instead -- it bundles its own pip and sidesteps this entirely, and
-# you'll want it for OpenShell's CLI anyway per its own quickstart.
-python3 -m pip install --user uv
+# Confirmed on the real cluster, two real issues in sequence:
+# 1. `python3 -m venv` fails: "ensurepip is not available" (missing
+#    python3.12-venv system package, no sudo on a shared cluster).
+# 2. `pip install --user uv` (the obvious workaround) then fails with a
+#    DIFFERENT error: "externally-managed-environment" (PEP 668 --
+#    modern Debian/Ubuntu blocks pip installs outside a venv).
+# Fix: uv's own standalone installer skips pip/apt entirely, sidestepping
+# both problems at once (uv implements venv creation itself).
+curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 uv venv .venv
 uv pip install -e ".[dev]" --python .venv/bin/python
@@ -39,8 +42,12 @@ uv pip install -e ".[dev]" --python .venv/bin/python
 cp .env.example .env
 ```
 
-Fallback if `uv` itself has issues (skips venv, installs into your user
-site-packages directly): `python3 -m pip install --user -e ".[dev]"`
+Fallback if the cluster blocks outbound HTTPS to astral.sh (unlikely --
+`module load rootless-docker` already needs network access): pip's
+explicit override flag, still without a venv:
+```bash
+python3 -m pip install --user --break-system-packages -e ".[dev]"
+```
 
 Edit `.env` and set at minimum:
 ```
@@ -245,19 +252,27 @@ docker info 2>&1 | head -5
 
 ### JB-4. Set up the project (same as the SSH path, in the Terminal)
 
-**Real issue hit on the cluster (2026-09-03):** `python3 -m venv .venv`
-fails with `ensurepip is not available` — the `python3.12-venv` system
-package isn't installed, and you won't have `sudo` on a shared cluster to
-fix it the way the error message suggests. Use `uv` instead, which
-bundles its own pip and doesn't depend on the system's `ensurepip`
-module (you'll also want `uv` for OpenShell's CLI per its own quickstart):
+**Real issues hit on the cluster (2026-09-03), in order:**
+
+1. `python3 -m venv .venv` fails: `ensurepip is not available` (missing
+   `python3.12-venv` system package, no `sudo` on a shared cluster).
+2. The suggested fix, `pip install --user uv`, then fails with a
+   **different** real error: `externally-managed-environment` (PEP 668 --
+   modern Debian/Ubuntu blocks `pip install` outside a venv by default).
+   Since fix #1's own suggestion (venv) is what's broken, this is a real
+   dead end via pip.
+
+**Actual working fix:** install `uv` via its own standalone installer,
+which doesn't go through `pip` or `apt` at all -- sidesteps both PEP 668
+*and* the broken `ensurepip`, since `uv venv` implements environment
+creation itself:
 
 ```bash
 cd /storage/hackathon_teams/<your-team>/
 git clone <repo>   # or apply the git bundle you were given
 cd nvidia_hackathon/backend
 
-python3 -m pip install --user uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 uv venv .venv
 uv pip install -e ".[dev]" --python .venv/bin/python
@@ -266,13 +281,13 @@ cp .env.example .env
 # edit .env: NVIDIA_API_KEY, etc. -- nano .env or JupyterLab's file editor
 ```
 
-**Fallback** if `uv` itself has problems: skip the venv entirely and
-install straight into the Jupyter kernel's own environment (less
-isolated, but unblocks you immediately):
+**Fallback** if the cluster blocks outbound HTTPS to astral.sh (unlikely
+-- `module load rootless-docker` already needed network access): use
+pip's explicit override flag instead, still without a venv:
 ```bash
-python3 -m pip install --user -e ".[dev]"
+python3 -m pip install --user --break-system-packages -e ".[dev]"
 ```
-If you use the fallback, drop `source .venv/bin/activate` from the steps
+If you use this fallback, drop `source .venv/bin/activate` from the steps
 below — there's no venv to activate.
 
 ### JB-5. Run Switchyard + backend as detached background processes
