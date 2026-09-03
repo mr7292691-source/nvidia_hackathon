@@ -21,15 +21,26 @@ Everything from here on happens **inside a Slurm job, not on `slogin01`**
 — per the cluster's own onboarding docs, the login node isn't for
 compute.
 
-## Step 2 — Get an interactive GPU session and set up the venv (once)
+## Step 2 — Interactive GPU session and set up the venv (once)
 
 ```bash
 srun --qos=1gpu --gres=gpu:1 --pty bash
 
-python3 -m venv .venv
-.venv/bin/pip install -e ".[dev]"
+# Confirmed on the real cluster: stdlib `python3 -m venv` fails here with
+# "ensurepip is not available" (missing python3.12-venv system package,
+# no sudo on a shared cluster to fix it the suggested way). Use `uv`
+# instead -- it bundles its own pip and sidesteps this entirely, and
+# you'll want it for OpenShell's CLI anyway per its own quickstart.
+python3 -m pip install --user uv
+export PATH="$HOME/.local/bin:$PATH"
+uv venv .venv
+uv pip install -e ".[dev]" --python .venv/bin/python
+
 cp .env.example .env
 ```
+
+Fallback if `uv` itself has issues (skips venv, installs into your user
+site-packages directly): `python3 -m pip install --user -e ".[dev]"`
 
 Edit `.env` and set at minimum:
 ```
@@ -219,32 +230,50 @@ continue working. If you specifically want notebook cells instead, use
 
 ### JB-3. Test the module system first (the actual open question)
 
+**CONFIRMED WORKING on the real cluster (2026-09-03):** `module load
+rootless-docker` succeeds inside a JupyterHub session and starts the
+daemon correctly ("✓ Rootless Docker daemon started successfully!").
+This means the Jupyter environment does have Slurm module-system access,
+at least for this — the earlier concern that Jupyter sessions might be a
+more restricted Kubernetes pod without this access turned out not to
+apply here. Good news for the OpenShell path specifically.
+
 ```bash
 module load rootless-docker 2>&1
-echo "exit code: $?"
 docker info 2>&1 | head -5
 ```
 
-If `module load` isn't found at all, or `docker info` fails, that's a
-real, informative answer — it likely means this Jupyter environment
-doesn't have the same module system / container runtime access as an
-`srun` shell, and OpenShell won't work from here regardless of anything
-else in this project. Worth knowing before investing more time in this
-path specifically for the OpenShell piece — the Switchyard/backend/
-DeepAgents pieces below don't depend on this at all and should work
-either way.
-
 ### JB-4. Set up the project (same as the SSH path, in the Terminal)
+
+**Real issue hit on the cluster (2026-09-03):** `python3 -m venv .venv`
+fails with `ensurepip is not available` — the `python3.12-venv` system
+package isn't installed, and you won't have `sudo` on a shared cluster to
+fix it the way the error message suggests. Use `uv` instead, which
+bundles its own pip and doesn't depend on the system's `ensurepip`
+module (you'll also want `uv` for OpenShell's CLI per its own quickstart):
 
 ```bash
 cd /storage/hackathon_teams/<your-team>/
 git clone <repo>   # or apply the git bundle you were given
 cd nvidia_hackathon/backend
-python3 -m venv .venv
-.venv/bin/pip install -e ".[dev]"
+
+python3 -m pip install --user uv
+export PATH="$HOME/.local/bin:$PATH"
+uv venv .venv
+uv pip install -e ".[dev]" --python .venv/bin/python
+
 cp .env.example .env
 # edit .env: NVIDIA_API_KEY, etc. -- nano .env or JupyterLab's file editor
 ```
+
+**Fallback** if `uv` itself has problems: skip the venv entirely and
+install straight into the Jupyter kernel's own environment (less
+isolated, but unblocks you immediately):
+```bash
+python3 -m pip install --user -e ".[dev]"
+```
+If you use the fallback, drop `source .venv/bin/activate` from the steps
+below — there's no venv to activate.
 
 ### JB-5. Run Switchyard + backend as detached background processes
 
