@@ -3,6 +3,23 @@
 NVIDIA GSI Open Hackathon · Team Cognitive Core
 Repo target: `https://github.com/mr7292691-source/nvidia_hackathon.git`
 
+**Status update (this revision):** Phase 1 items that don't require a live
+NVIDIA endpoint are now REAL and verified, not stubbed or guessed from
+docs — specifically: Switchyard routing (corrected to the real YAML
+bundle format after testing against the actually-installed package), NeMo
+Relay scope wrapping + ATOF export (verified real JSONL output), the
+tool-execution guardrail pipeline, SQLite persistence, all three decision
+gates with real scoring logic, the DeepAgents supervisor graph
+(constructs successfully with 4 real SubAgents + native human-approval
+interrupt), and the OpenShell sandbox client (real SDK calls). Full test
+suite: 7/7 passing, including a genuine proof of the slide-6 evidence-gap
+requirement. What's genuinely still unverified: anything requiring a live
+call to build.nvidia.com or a reachable OpenShell cluster — both are
+blocked by this environment's network policy, not by anything wrong in
+the code (verified directly: Switchyard correctly resolves and attempts
+the real upstream call, just gets `host_not_allowed` from this sandbox's
+proxy). See §1 below for what's still open.
+
 **Revision note:** this replaces the previous version. Two changes at your
 request: (1) no Docker anywhere — replaced with Apptainer/Slurm-native
 tooling, which is what the Curiosity v2 cluster actually supports; (2) no
