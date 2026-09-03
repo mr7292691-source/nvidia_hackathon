@@ -179,3 +179,117 @@ pattern as reaching JupyterHub per the cluster's own docs.
 
 None of these are checked off yet — this doc exists so whoever has real
 cluster access can work through them in order.
+
+---
+
+## Alternative: running via JupyterHub instead of SSH + Slurm
+
+Everything above assumes SSH access and `srun`/`sbatch`. If you're running
+through the Axis Portal's Curiosity Hub app (JupyterHub) instead, the
+steps are similar but not identical — and it introduces one new open
+question worth flagging up front.
+
+**New uncertainty this path introduces:** JupyterHub notebook sessions
+are a different execution environment than an `srun` shell — the cluster
+docs list "Kubernetes workloads" and "web-based interactive notebooks" as
+separate items, which suggests the Jupyter environment may be a
+Kubernetes pod rather than a direct Slurm compute-node shell. That
+matters because:
+- `module load rootless-docker` (Lmod-style, shown in the Slurm docs) may
+  or may not be available inside a Jupyter session's shell at all
+- Even if it is, nested Docker-in-a-pod is often blocked or needs a
+  privileged pod in typical Kubernetes setups — unrelated to anything in
+  this project, just how Kubernetes usually works
+- **This needs to be tested directly as step 1 below, not assumed either way.**
+
+### JB-1. Launch the notebook session
+
+Axis Portal → Curiosity Hub app → log in with cluster credentials → for
+hackathons, choose your GPU/CPU/memory allocation (pick at least 1 GPU,
+matching what Switchyard/NIM need elsewhere in this setup).
+
+### JB-2. Open a Terminal, not just notebook cells
+
+JupyterLab has a real terminal (File → New → Terminal). Use it for
+anything long-running (Switchyard, the backend) — a notebook cell that
+runs `uvicorn ...` directly will just block forever rather than let you
+continue working. If you specifically want notebook cells instead, use
+`!command &` with `nohup` and output redirection so the process detaches
+(shown below); the Terminal is simpler and more predictable for this.
+
+### JB-3. Test the module system first (the actual open question)
+
+```bash
+module load rootless-docker 2>&1
+echo "exit code: $?"
+docker info 2>&1 | head -5
+```
+
+If `module load` isn't found at all, or `docker info` fails, that's a
+real, informative answer — it likely means this Jupyter environment
+doesn't have the same module system / container runtime access as an
+`srun` shell, and OpenShell won't work from here regardless of anything
+else in this project. Worth knowing before investing more time in this
+path specifically for the OpenShell piece — the Switchyard/backend/
+DeepAgents pieces below don't depend on this at all and should work
+either way.
+
+### JB-4. Set up the project (same as the SSH path, in the Terminal)
+
+```bash
+cd /storage/hackathon_teams/<your-team>/
+git clone <repo>   # or apply the git bundle you were given
+cd nvidia_hackathon/backend
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+cp .env.example .env
+# edit .env: NVIDIA_API_KEY, etc. -- nano .env or JupyterLab's file editor
+```
+
+### JB-5. Run Switchyard + backend as detached background processes
+
+From the Terminal:
+
+```bash
+source .venv/bin/activate
+nohup switchyard serve --routing-profiles infra/switchyard/routes.dev.yaml --port 4100 > switchyard.log 2>&1 &
+export SWITCHYARD_BASE_URL=http://localhost:4100/v1
+nohup uvicorn app.main:app --host 0.0.0.0 --port 8000 > backend.log 2>&1 &
+tail -f switchyard.log backend.log   # Ctrl-C to stop watching, processes keep running
+```
+
+If doing this from notebook cells instead of the Terminal, each `!`
+shell-magic line becomes its own cell, e.g.:
+```python
+!nohup switchyard serve --routing-profiles infra/switchyard/routes.dev.yaml --port 4100 > switchyard.log 2>&1 &
+```
+
+### JB-6. Hit the same checkpoint as the SSH path -- from within the notebook, not a browser
+
+Since JupyterHub likely doesn't expose arbitrary backend ports to your
+browser without a proxy extension (unconfirmed either way for this
+cluster), the reliable way to test is from Python in a notebook cell,
+same machine:
+
+```python
+import httpx
+r = httpx.post("http://localhost:8000/events/replay/houston-demo")
+print(r.json())
+event_id = r.json()["event_id"]
+print(httpx.get(f"http://localhost:8000/agents/gates/{event_id}").json())
+```
+
+This should return clean JSON exactly like the SSH path's `curl`
+checkpoint — if it does, dev-mode Switchyard + backend genuinely works
+from a JupyterHub session, independent of the OpenShell question above.
+
+### JB-7. Frontend access
+
+Getting a browser to actually reach the backend from outside the Jupyter
+session likely needs either `jupyter-server-proxy` (if installed on this
+JupyterHub — check `pip list | grep jupyter-server-proxy` from the
+Terminal) or an SSH tunnel if SSH access to the same node is available in
+parallel. Neither is confirmed for this specific cluster. If neither
+works, the notebook-based `httpx` calls in JB-6 are still a complete way
+to exercise and demo the backend's real behavior without needing the
+React frontend running against it live.
