@@ -1,4 +1,5 @@
 import { useActiveEventStore } from "../store/activeEventStore";
+import { useGates } from "../hooks/useGates";
 import { LineagePanel } from "../components/evidence/LineagePanel";
 import { FieldImageUpload } from "../components/evidence/FieldImageUpload";
 import { GatesPanel } from "../components/gates/GatesPanel";
@@ -9,6 +10,7 @@ import { Card } from "../components/common/Card";
 
 export function EventDetail() {
   const { eventId, lineage, findings, lifesafetyGuidance, insurerExposure } = useActiveEventStore();
+  const { gates, loading: gatesLoading } = useGates(eventId);
 
   if (!eventId) {
     return (
@@ -40,13 +42,7 @@ export function EventDetail() {
           )}
         </div>
         <div>
-          {/*
-            TODO: the backend doesn't yet return structured per-gate results
-            from /agents/run — GatesPanel renders defaults until
-            app/nvidia_runtime/relay/guardrails.py's ToolExecutionInterceptOutcome
-            reasons are surfaced through the API response.
-          */}
-          <GatesPanel />
+          <GatesPanel gates={gates} loading={gatesLoading} />
           <LifeSafetyCard guidance={lifesafetyGuidance} />
           <InsurerExposureCard report={insurerExposure} />
         </div>

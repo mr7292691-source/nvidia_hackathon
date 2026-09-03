@@ -1,64 +1,46 @@
+import type { GateStatus as ApiGateStatus } from "../../api/decisions";
 import { StatusBadge } from "../common/StatusBadge";
 import { Card } from "../common/Card";
 
-interface GateStatus {
-  name: string;
-  description: string;
-  status: "pass" | "fail" | "pending" | "unknown";
-  reason?: string;
-}
-
 interface GatesPanelProps {
-  /**
-   * The backend doesn't yet expose a dedicated gate-status endpoint — gate
-   * pass/fail currently only surfaces implicitly (a blocked NeMo Relay
-   * guardrail short-circuits /agents/run). Until app/nvidia_runtime/relay/
-   * guardrails.py returns structured results back through the API, this
-   * component accepts them as a prop so it can be wired in incrementally;
-   * see TODO in EventDetail.tsx.
-   */
-  gates?: GateStatus[];
+  /** Real per-gate results from GET /agents/gates/{eventId}, or null while
+   * loading / before an event exists. Human approval isn't included in
+   * that endpoint (it's not a NeMo Relay guardrail, it's the separate
+   * /approvals flow) so it's always shown as a static "pending" row here. */
+  gates: ApiGateStatus[] | null;
+  loading?: boolean;
 }
 
-const DEFAULT_GATES: GateStatus[] = [
-  {
-    name: "Evidence Verifier",
-    description: "Scores freshness, location, and source agreement.",
-    status: "unknown",
-  },
-  {
-    name: "Confidence Gate",
-    description: "Blocks weak evidence before it reaches the specialists.",
-    status: "unknown",
-  },
-  {
-    name: "Policy Verifier",
-    description: "Checks proposed actions against deterministic policy bounds.",
-    status: "unknown",
-  },
-  {
-    name: "Human Approval",
-    description: "Final sign-off — no action leaves the system without it.",
-    status: "pending",
-  },
-];
-
-export function GatesPanel({ gates = DEFAULT_GATES }: GatesPanelProps) {
+export function GatesPanel({ gates, loading }: GatesPanelProps) {
   return (
     <Card title="Decision Gates">
       <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
-        {gates.map((gate) => (
+        {loading && <p style={{ color: "#666", fontSize: "0.85rem" }}>Checking gates...</p>}
+        {!loading && !gates && <p style={{ color: "#666", fontSize: "0.85rem" }}>No event loaded.</p>}
+        {gates?.map((gate) => (
           <div key={gate.name} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
             <div>
               <div style={{ fontWeight: 600 }}>{gate.name}</div>
-              <div style={{ fontSize: "0.85rem", color: "#666" }}>{gate.description}</div>
               {gate.reason && (
-                <div style={{ fontSize: "0.8rem", color: "#c5221f", marginTop: "0.25rem" }}>{gate.reason}</div>
+                <div style={{ fontSize: "0.8rem", color: gate.passed ? "#666" : "#c5221f", marginTop: "0.25rem" }}>
+                  {gate.reason}
+                </div>
               )}
             </div>
-            <StatusBadge status={gate.status} label={gate.status} />
+            <StatusBadge status={gate.passed ? "pass" : "fail"} label={gate.passed ? "pass" : "fail"} />
           </div>
         ))}
+        {gates && (
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div>
+              <div style={{ fontWeight: 600 }}>Human Approval</div>
+              <div style={{ fontSize: "0.8rem", color: "#666" }}>
+                Final sign-off -- no action leaves the system without it.
+              </div>
+            </div>
+            <StatusBadge status="pending" label="pending" />
+          </div>
+        )}
       </div>
     </Card>
   );

@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { useRunHoustonReplay } from "../hooks/useRunHoustonReplay";
 import { useActiveEventStore } from "../store/activeEventStore";
@@ -7,13 +8,23 @@ export function Dashboard() {
   const { run } = useRunHoustonReplay();
   const { eventId, isRunning, error } = useActiveEventStore();
   const navigate = useNavigate();
+  // Tracks whether the user just triggered a run in THIS page visit, so we
+  // only auto-navigate once, right after a fresh run finishes -- not on
+  // every render where eventId happens to already be set (e.g. coming back
+  // to the Dashboard from EventDetail shouldn't bounce you right back).
+  const justTriggered = useRef(false);
 
   async function handleRun() {
+    justTriggered.current = true;
     await run();
-    // Navigate once the store has an event_id (checked on next render via effect
-    // would be cleaner; kept simple here since run() resolves after state is set).
-    navigate("/event");
   }
+
+  useEffect(() => {
+    if (justTriggered.current && eventId && !isRunning) {
+      justTriggered.current = false;
+      navigate("/event");
+    }
+  }, [eventId, isRunning, navigate]);
 
   return (
     <div>
@@ -32,7 +43,7 @@ export function Dashboard() {
           {isRunning ? "Running..." : "Run Houston replay"}
         </button>
         {error && <p style={{ color: "#c5221f" }}>{error}</p>}
-        {eventId && !isRunning && (
+        {eventId && !isRunning && !justTriggered.current && (
           <p style={{ fontSize: "0.85rem", color: "#1e8e3e" }}>
             Last event: {eventId} — <a href="/event">view details</a>
           </p>
