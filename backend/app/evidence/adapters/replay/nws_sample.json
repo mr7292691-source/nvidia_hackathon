@@ -1,0 +1,18 @@
+[
+  {
+    "observed_at": "2026-06-14T08:00:00Z",
+    "location": {
+      "type": "Polygon",
+      "coordinates": [[[-95.55, 29.60], [-95.30, 29.60], [-95.30, 29.85], [-95.55, 29.85], [-95.55, 29.60]]]
+    },
+    "payload": {
+      "alert_id": "SYN-NWS-HOU-0001",
+      "event_type": "Flash Flood Warning",
+      "severity": "Severe",
+      "headline": "Synthetic: Heavy rain forecast, 4-7 inches, Harris County",
+      "effective": "2026-06-14T08:00:00Z",
+      "expires": "2026-06-14T20:00:00Z"
+    },
+    "confidence_hint": 0.95
+  }
+]

@@ -1,0 +1,13 @@
+[
+  {
+    "observed_at": "2026-06-14T09:45:00Z",
+    "location": {"type": "Point", "coordinates": [-95.41, 29.74]},
+    "payload": {
+      "incident_id": "SYN-TRANSTAR-77002",
+      "road": "Synthetic: US-59 Southbound @ Buffalo Speedway",
+      "status": "HIGH_WATER_CLOSURE",
+      "reported_by": "field_image_submission"
+    },
+    "confidence_hint": 0.8
+  }
+]

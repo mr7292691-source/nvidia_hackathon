@@ -1,0 +1,14 @@
+[
+  {
+    "observed_at": "2026-06-14T09:30:00Z",
+    "location": {"type": "Point", "coordinates": [-95.40, 29.75]},
+    "payload": {
+      "gauge_id": "SYN-HCFCD-520",
+      "gauge_name": "Synthetic: Brays Bayou @ Gessner",
+      "reading_ft": 22.4,
+      "bankfull_ft": 20.0,
+      "trend": "rising"
+    },
+    "confidence_hint": 0.88
+  }
+]

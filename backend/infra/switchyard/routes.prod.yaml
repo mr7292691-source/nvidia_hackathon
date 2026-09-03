@@ -1,0 +1,30 @@
+# NVIDIA-NeMo/Switchyard routing-profile bundle — PROD environment
+# (self-hosted NIM containers on Curiosity B300).
+#
+# Same route ids as routes.dev.yaml. Swapping SWITCHYARD_ROUTES_FILE to
+# point here is the only change needed to move the backend from
+# build.nvidia.com to self-hosted NIM on the B300 node — application code
+# never changes.
+#
+# The NIM containers themselves are run via Apptainer + Slurm, not Docker —
+# see infra/slurm/nim-reasoning.sbatch and infra/slurm/nim-vision.sbatch.
+# Their hostnames below assume those jobs are running and reachable on the
+# cluster's internal network; adjust to the actual allocated node hostnames
+# once the team has real Slurm job placements (`squeue` / `sinfo`).
+
+defaults:
+  format: openai
+  # No api_key here — intra-cluster traffic to the self-hosted NIM
+  # containers. Add one via defaults.api_key if the NIM deployment enforces
+  # NGC_API_KEY auth even in-cluster.
+
+# `${NIM_REASONING_HOST}` / `${NIM_VISION_HOST}` are expanded from the
+# environment at load time (verified: this bundle format supports env
+# interpolation the same way routes.dev.yaml's ${NVIDIA_API_KEY} does).
+routes:
+  lifeshield-reasoning:
+    model: nemotron-4-340b-instruct
+    base_url: http://${NIM_REASONING_HOST}:8000/v1
+  lifeshield-vision:
+    model: vila
+    base_url: http://${NIM_VISION_HOST}:8000/v1

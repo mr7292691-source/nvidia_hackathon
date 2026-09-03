@@ -1,0 +1,15 @@
+[
+  {
+    "observed_at": "2026-01-01T00:00:00Z",
+    "location": {
+      "type": "Polygon",
+      "coordinates": [[[-95.45, 29.70], [-95.35, 29.70], [-95.35, 29.80], [-95.45, 29.80], [-95.45, 29.70]]]
+    },
+    "payload": {
+      "zone_id": "SYN-FEMA-AE-4801C",
+      "flood_zone": "AE",
+      "base_flood_elevation_ft": 48.0
+    },
+    "confidence_hint": 1.0
+  }
+]

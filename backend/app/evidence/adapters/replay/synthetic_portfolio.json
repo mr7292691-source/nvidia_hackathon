@@ -1,0 +1,26 @@
+[
+  {
+    "policy_id": "SYN-POL-10001",
+    "location": {"type": "Point", "coordinates": [-95.41, 29.745]},
+    "tiv_usd": 450000,
+    "limit_usd": 400000,
+    "deductible_usd": 5000,
+    "occupancy": "single_family_residential"
+  },
+  {
+    "policy_id": "SYN-POL-10002",
+    "location": {"type": "Point", "coordinates": [-95.405, 29.752]},
+    "tiv_usd": 1200000,
+    "limit_usd": 1000000,
+    "deductible_usd": 25000,
+    "occupancy": "commercial_retail"
+  },
+  {
+    "policy_id": "SYN-POL-10003",
+    "location": {"type": "Point", "coordinates": [-95.418, 29.738]},
+    "tiv_usd": 300000,
+    "limit_usd": 300000,
+    "deductible_usd": 2500,
+    "occupancy": "single_family_residential"
+  }
+]

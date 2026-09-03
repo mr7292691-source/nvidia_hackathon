@@ -1,0 +1,35 @@
+# NVIDIA-NeMo/Switchyard routing-profile bundle — DEV environment.
+#
+# This is the REAL config schema for the installed `nemo-switchyard` 0.2.0
+# package (`pip install nemo-switchyard`, CLI entrypoint `switchyard`).
+# Verified locally: `switchyard serve --routing-profiles routes.dev.yaml`
+# starts a real OpenAI-compatible proxy and serves /v1/models correctly
+# with these two routes registered.
+#
+# NOTE: earlier drafts of this file used a `routes.toml` / `--config`
+# format documented for a standalone `switchyard-server` Rust binary. The
+# pip-distributed CLI actually installed uses this YAML "routing-profile
+# bundle" schema instead (`switchyard serve --routing-profiles <file>`,
+# `switchyard.cli.route_bundle` module). This file reflects what was
+# actually verified to work, not what was documented elsewhere.
+#
+# Start it:
+#   switchyard serve --routing-profiles infra/switchyard/routes.dev.yaml --port 4100
+#
+# `${NVIDIA_API_KEY}` is expanded from the environment at load time — never
+# hardcode the key here.
+
+defaults:
+  base_url: https://integrate.api.nvidia.com/v1
+  api_key: ${NVIDIA_API_KEY}
+  format: openai
+
+routes:
+  # TODO: confirm these exact model IDs against build.nvidia.com once the
+  # team can reach it (this sandbox's network policy blocks
+  # integrate.api.nvidia.com, so the ID strings below are unverified
+  # against the live catalog — only the YAML schema itself was verified).
+  lifeshield-reasoning:
+    model: nvidia/nemotron-4-340b-instruct
+  lifeshield-vision:
+    model: nvidia/vila
