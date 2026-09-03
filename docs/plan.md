@@ -142,14 +142,16 @@ version works — there's no partial-credit "the interface exists" milestone.
 - [x] Both `tsc -b` and `vite build` verified clean after every change in this round — real backend integration (calling the actual FastAPI app, not mocks) hasn't been run in a real browser yet, only via typecheck/build and direct HTTP client tests against the ASGI app
 
 ### Phase 6 — Testing & CI
-- [x] Backend: unit tests for the real gate logic — done, 13 tests in `tests/unit/test_gates.py`
+- [x] Backend: unit tests for the real gate logic — 13 tests in `tests/unit/test_gates.py`
 - [ ] Backend: unit tests for the evidence lineage builder specifically — partially covered indirectly via the gate tests, no dedicated test file yet
 - [ ] Backend: integration test against a real (or recorded) NIM response via Switchyard — not done, blocked on the same network-access issue as Phase 1
-- [ ] Frontend: component tests (Vitest + React Testing Library) — not done
-- [ ] GitHub Actions workflows — not done
-- [ ] Both must pass before any push to `main` — not enforced yet, no CI exists
+- [x] Backend: ran `mypy` for the first time — caught and fixed 8 real type errors (not style nits), including a genuine bug in `openshell_sandbox.py` (`SandboxClient` methods require a `workspace` kwarg that was missing entirely) that would have failed at runtime against a real cluster
+- [x] Frontend: component tests (Vitest + React Testing Library) for `GatesPanel`, `InsurerExposureCard`, `LifeSafetyCard` — 12 tests, all passing
+- [x] Frontend: added a real `eslint.config.js` (there was none before — `npm run lint` was crashing outright). Caught a genuine bug in `Dashboard.tsx` (reading a ref's `.current` during render — refs don't trigger re-renders, so the UI could go stale), fixed by moving that flag to real component state
+- [x] GitHub Actions: `backend-ci.yml` (ruff, mypy, pytest, app-boot smoke test) and `frontend-ci.yml` (eslint, tsc, vitest, build) — every step verified to actually pass locally before being written into the workflow, not assumed
+- [ ] Both must pass before any push to `main` — the workflows exist and are verified locally, but no branch protection rule has been configured on GitHub itself (that's a repo Settings change on your end, not something committable)
 
-**Current real status: 17/17 backend tests passing** (`pytest tests/ -q`), run fresh before every commit in this conversation.
+**Current real status: 17/17 backend tests + 12/12 frontend tests passing**, plus clean `mypy`, `ruff`, and `eslint` — all re-verified immediately before every commit in this conversation.
 
 ### Phase 7 — Deployment on Curiosity v2 (Slurm + Apptainer, no Docker)
 **Status: not started — needs your cluster access, none of this is runnable from this sandbox.**
@@ -177,7 +179,7 @@ version works — there's no partial-credit "the interface exists" milestone.
 | 3 — Decision gates | ✅ Done, tested end-to-end including the slide-6 proof requirement |
 | 4 — Live evidence sources | 🟡 NWS/USGS/FEMA real code written, unverified against live data (same network block); HCFCD/TranStar correctly still replay-only |
 | 5 — Frontend integration | 🟡 Gates + navigation fixed; map, auth, full loading states still open |
-| 6 — Testing & CI | 🟡 17/17 backend tests passing; no frontend tests, no CI pipeline yet |
+| 6 — Testing & CI | 🟡 17/17 backend + 12/12 frontend tests passing, mypy/ruff/eslint all clean, both CI workflows written and locally-verified; branch protection on GitHub itself still needs your action |
 | 7 — Cluster deployment | ⬜ Not started — needs your cluster access |
 | 8 — Demo readiness | ⬜ Not started |
 
