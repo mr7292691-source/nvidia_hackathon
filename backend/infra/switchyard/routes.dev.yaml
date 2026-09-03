@@ -25,10 +25,19 @@ defaults:
   format: openai
 
 routes:
-  # TODO: confirm these exact model IDs against build.nvidia.com once the
-  # team can reach it (this sandbox's network policy blocks
-  # integrate.api.nvidia.com, so the ID strings below are unverified
-  # against the live catalog — only the YAML schema itself was verified).
+  # TODO: pin these against the LIVE catalog before use -- the catalog is
+  # volatile (models get deprecated on short notice; confirmed as of this
+  # writing that several models across NVIDIA's catalog are mid-deprecation).
+  #
+  # nvidia/nemotron-4-340b-instruct: unverified placeholder, this
+  # sandbox's network policy blocked checking build.nvidia.com directly.
+  #
+  # nvidia/vila: CONFIRMED DEPRECATED (not just unverified) -- its own
+  # build.nvidia.com page states "This NIM Endpoint has been deprecated.
+  # Please transition to another model to avoid any service
+  # interruptions." Do not use as-is. Check build.nvidia.com/explore/vision
+  # for whatever vision-language model is current right now and replace
+  # this before running anything against it.
   lifeshield-reasoning:
     model: nvidia/nemotron-4-340b-instruct
   lifeshield-vision:

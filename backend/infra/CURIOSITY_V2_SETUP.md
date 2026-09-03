@@ -61,16 +61,19 @@ NEMO_RELAY_ATOF_OUTPUT_DIR=./var/atof
 
 ## Step 3 — Confirm the real NIM model IDs
 
-`infra/switchyard/routes.dev.yaml` currently has **placeholder** model
-IDs (`nvidia/nemotron-4-340b-instruct`, `nvidia/vila`) — unverified since
-this project's own sandbox couldn't reach build.nvidia.com. Before
-anything else works:
+`infra/switchyard/routes.dev.yaml` has **placeholder** model IDs — and one
+of them is worse than just unverified: **`nvidia/vila` is confirmed
+deprecated** (its own build.nvidia.com page says so directly). The
+reasoning model ID (`nvidia/nemotron-4-340b-instruct`) is merely
+unverified, not confirmed-bad, but the catalog is volatile enough right
+now (several other models across NVIDIA's catalog are mid-deprecation on
+short notice) that it shouldn't be trusted either.
 
-1. Log into build.nvidia.com, find the actual reasoning model (Nemotron
-   family) and vision model you want to use
-2. Copy their exact catalog IDs
-3. Edit `infra/switchyard/routes.dev.yaml`, replacing the two placeholder
-   `model:` values
+1. Go to `build.nvidia.com/explore/vision` for a current vision model,
+   and `build.nvidia.com/explore` (or search Nemotron directly) for the
+   reasoning model
+2. Copy their exact current catalog IDs
+3. Edit `infra/switchyard/routes.dev.yaml`, replacing both `model:` values
 
 ## Step 4 — Bring up Switchyard + the backend, verify the real dev path
 
