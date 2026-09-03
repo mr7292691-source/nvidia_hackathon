@@ -1,3 +1,7 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "lifeshield-backend"
 version = "0.1.0"
@@ -51,3 +55,12 @@ select = ["E4", "E7", "E9", "F", "I"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+
+[tool.setuptools.packages.find]
+# Real error hit on Curiosity v2: setuptools' flat-layout auto-discovery
+# found `infra/` (Slurm scripts, YAML, markdown -- not Python code) as an
+# ambiguous second "top-level package" alongside `app/`, and refused to
+# build rather than guess. `app*` restricts discovery to the actual
+# Python package tree (app, app.core, app.agents, ...), excluding infra/,
+# tests/, scripts/, docs/, var/ entirely.
+include = ["app*"]

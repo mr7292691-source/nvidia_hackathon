@@ -26,14 +26,17 @@ compute.
 ```bash
 srun --qos=1gpu --gres=gpu:1 --pty bash
 
-# Confirmed on the real cluster, two real issues in sequence:
+# Confirmed on the real cluster, three real issues in sequence:
 # 1. `python3 -m venv` fails: "ensurepip is not available" (missing
 #    python3.12-venv system package, no sudo on a shared cluster).
 # 2. `pip install --user uv` (the obvious workaround) then fails with a
 #    DIFFERENT error: "externally-managed-environment" (PEP 668 --
 #    modern Debian/Ubuntu blocks pip installs outside a venv).
-# Fix: uv's own standalone installer skips pip/apt entirely, sidestepping
-# both problems at once (uv implements venv creation itself).
+# 3. After fixing 1+2 with uv's own installer, `uv pip install -e .`
+#    failed with a THIRD error: setuptools' flat-layout auto-discovery
+#    choked on `infra/` sitting next to `app/` at the repo root. Fixed in
+#    pyproject.toml (explicit packages.find + build-system block) --
+#    pull the latest commit/bundle to get this fix.
 curl -LsSf https://astral.sh/uv/install.sh | sh
 export PATH="$HOME/.local/bin:$PATH"
 uv venv .venv
@@ -256,16 +259,22 @@ docker info 2>&1 | head -5
 
 1. `python3 -m venv .venv` fails: `ensurepip is not available` (missing
    `python3.12-venv` system package, no `sudo` on a shared cluster).
-2. The suggested fix, `pip install --user uv`, then fails with a
+2. `pip install --user uv` (the obvious workaround) then fails with a
    **different** real error: `externally-managed-environment` (PEP 668 --
    modern Debian/Ubuntu blocks `pip install` outside a venv by default).
-   Since fix #1's own suggestion (venv) is what's broken, this is a real
-   dead end via pip.
+3. After fixing 1+2 with `uv`, `uv pip install -e ".[dev]"` fails with a
+   **third** real error: `Multiple top-level packages discovered in a
+   flat-layout: ['app', 'infra']` -- setuptools' auto-discovery got
+   confused by `infra/` (Slurm scripts/YAML/markdown, not Python code)
+   sitting alongside `app/` at the repo root, and refused to guess which
+   one to package. **Fixed in `pyproject.toml`** (explicit
+   `[tool.setuptools.packages.find] include = ["app*"]` + an explicit
+   `[build-system]` block) -- verified with a clean install into a fresh
+   throwaway venv, package imports correctly, full test suite still
+   17/17 passing. If you pulled this repo before that fix landed,
+   `git pull`/re-apply the bundle to pick it up.
 
-**Actual working fix:** install `uv` via its own standalone installer,
-which doesn't go through `pip` or `apt` at all -- sidesteps both PEP 668
-*and* the broken `ensurepip`, since `uv venv` implements environment
-creation itself:
+**Working sequence, all three fixes applied:**
 
 ```bash
 cd /storage/hackathon_teams/<your-team>/
