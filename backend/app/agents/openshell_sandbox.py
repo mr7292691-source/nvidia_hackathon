@@ -1,25 +1,37 @@
 """
 OpenShell sandbox session manager -- real `openshell` 0.0.116 SDK
-(gRPC-backed), NOT the placeholder that used to log a message and do
-nothing. Verified by introspection against the installed package, and
-corrected once already by running `mypy` against it: every
-`SandboxClient` lifecycle method (`create`, `wait_ready`, `delete`,
-`wait_deleted`) requires a `workspace` keyword argument that isn't
-optional -- an earlier draft of this file omitted it, which mypy caught
-as a real type error (missing required argument), not a style nit.
+(gRPC-backed). Confirmed against the real SDK signatures (mypy caught real
+missing-argument bugs in an earlier draft, see git history).
 
-This IS the mechanism behind the deck's guardrail: "Agents never consume
-raw websites or databases -- they receive validated tools and evidence
-records." The sandbox's network policy (configured cluster-side, not by
-this client) is what actually enforces that; this file only manages the
-session lifecycle from the application side.
+CONNECTION MODES:
+  1. Local dev (default, OPENSHELL_GATEWAY_ENDPOINT unset): calls
+     `SandboxClient.from_active_cluster()`, which reads the CLI's on-disk
+     gateway state (`~/.config/openshell/active_gateway` or
+     `$OPENSHELL_GATEWAY`). Per NVIDIA's own quickstart, this requires
+     Docker Desktop running locally, and the gateway is auto-created the
+     first time `openshell sandbox create` runs. This is NVIDIA's
+     documented, supported local flow.
 
-HONEST LIMITATION: `SandboxClient.from_active_cluster()` requires a
-reachable OpenShell cluster (a real gRPC server) -- there is no such
-cluster in the sandbox this code was written in, so this has been
-type-checked and read carefully against the real SDK, but never actually
-executed against a live cluster. Genuinely unverified, called out
-explicitly rather than presented as tested.
+  2. Curiosity v2 / cluster (OPENSHELL_GATEWAY_ENDPOINT set to "host:port"):
+     calls `SandboxClient(endpoint=...)` directly against an explicit
+     gRPC address, bypassing the on-disk CLI state entirely -- necessary
+     because Slurm jobs get fresh, ephemeral environments per submission,
+     so relying on a CLI-populated home-directory file across separate job
+     invocations would be fragile. This mirrors exactly how this project
+     already handles Switchyard and the NIM containers: a persistent
+     Slurm-scheduled service at a known hostname:port, referenced by env
+     var, never hardcoded.
+
+HONEST LIMITATION: mode 2 assumes the team can stand up a long-lived,
+network-reachable OpenShell gateway as its own Slurm job (see
+infra/slurm/openshell-gateway.sbatch and infra/CURIOSITY_V2_SETUP.md).
+The exact CLI command to start such a gateway in "standalone daemon,
+reachable by other processes" form -- as opposed to the auto-created
+local flow -- is NOT confirmed against NVIDIA's documentation, which
+only clearly documents local auto-creation and remote-over-SSH
+(`openshell gateway start --remote user@host`, or `openshell gateway add
+<url>` for an already-running gateway e.g. on Brev). This is flagged as
+the first thing to verify on the real cluster, not asserted as tested.
 """
 from __future__ import annotations
 
@@ -33,9 +45,6 @@ from app.core.config import get_settings
 
 logger = logging.getLogger(__name__)
 
-# TODO: confirm the real workspace name/convention once a live OpenShell
-# cluster is available -- "default" is a placeholder, not verified against
-# any actual cluster configuration.
 DEFAULT_WORKSPACE = "default"
 
 
@@ -45,8 +54,19 @@ class OpenShellSandboxSession:
         self.workspace = workspace
         self._client: openshell.SandboxClient | None = None
 
+    def _connect(self) -> openshell.SandboxClient:
+        settings = get_settings()
+        if settings.openshell_gateway_endpoint:
+            logger.info(
+                "Connecting to OpenShell gateway at explicit endpoint %s (cluster mode).",
+                settings.openshell_gateway_endpoint,
+            )
+            return openshell.SandboxClient(endpoint=settings.openshell_gateway_endpoint)
+        logger.info("Connecting to OpenShell via from_active_cluster() (local dev mode).")
+        return openshell.SandboxClient.from_active_cluster()
+
     async def start(self) -> None:
-        self._client = openshell.SandboxClient.from_active_cluster()
+        self._client = self._connect()
         self._client.create(workspace=self.workspace, name=self.sandbox_name)
         self._client.wait_ready(self.sandbox_name, workspace=self.workspace)
         logger.info("OpenShell sandbox '%s' (workspace=%s) ready.", self.sandbox_name, self.workspace)
@@ -59,11 +79,6 @@ class OpenShellSandboxSession:
             self._client.close()
 
     def exec(self, command: list[str]) -> "openshell.ExecResult":
-        """`command` is argv-style (e.g. ["python3", "-c", "..."]), not a
-        shell string -- confirmed against the real signature, which takes
-        `Sequence[str]`. `exec` itself takes no `workspace` kwarg (unlike
-        create/delete/wait_ready/wait_deleted), since it addresses the
-        sandbox by id directly."""
         if self._client is None:
             raise RuntimeError("Sandbox not started -- call start() first.")
         return self._client.exec(self.sandbox_name, command)

@@ -31,6 +31,13 @@ class Settings(BaseSettings):
 
     # OpenShell
     openshell_sandbox_name: str = "lifeshield-sandbox"
+    # Leave empty for local dev (Docker Desktop running -> SDK's
+    # from_active_cluster() reads ~/.config/openshell/active_gateway,
+    # auto-created by the CLI on first `openshell sandbox create`).
+    # Set to "host:port" on Curiosity v2 if the team stands up a
+    # long-lived gateway job with a known address -- see
+    # infra/CURIOSITY_V2_SETUP.md for what's actually verified vs. not.
+    openshell_gateway_endpoint: str = ""
 
     # Prod-only direct targets (Switchyard config references these; app code
     # should not need them directly, kept here for infra scripts)
